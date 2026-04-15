@@ -968,6 +968,7 @@ function getRoomSnapshot() {
 let onlineAdvanceForQ = null;
 let onlineAdvanceTimer = null;
 let resultsShown = false;
+let disconnectWinTimer = null;
 function scheduleOnlineAdvance(q) {
   if (!ONLINE) return;
   if (q == null) return;
@@ -1568,6 +1569,7 @@ function showResults() {
   if (resultsShown) return;
   resultsShown = true;
   if (onlineAdvanceTimer) { clearTimeout(onlineAdvanceTimer); onlineAdvanceTimer = null; }
+  if (disconnectWinTimer) { clearTimeout(disconnectWinTimer); disconnectWinTimer = null; }
 
   const room = getRoomSnapshot();
   const hostScore = (ONLINE ? undefined : room?.hostScore) ?? (state.myRole === 'host' ? state.myScore : state.oppScore);
@@ -1620,13 +1622,17 @@ function handleDisconnect() {
   document.getElementById('disconnectedBanner').style.display = '';
   showNotif('⚠️ Nawalan ng koneksyon ang kalaban');
   // Auto-win for remaining player
-  setTimeout(showResults, 2000);
+  if (disconnectWinTimer) clearTimeout(disconnectWinTimer);
+  disconnectWinTimer = setTimeout(() => {
+    if (!resultsShown) showResults();
+  }, 2000);
 }
 
 // ─── RESET ─────────────────────────────────────────────────────────
 function resetGame() {
   stopPoll();
   clearInterval(state.timer);
+  if (disconnectWinTimer) { clearTimeout(disconnectWinTimer); disconnectWinTimer = null; }
   if (state.roomCode) {
     if (ONLINE) wsSend({ type: 'leave' });
     else deleteRoom(state.roomCode);
@@ -1634,6 +1640,12 @@ function resetGame() {
   resultsShown = false;
   onlineAdvanceForQ = null;
   if (onlineAdvanceTimer) { clearTimeout(onlineAdvanceTimer); onlineAdvanceTimer = null; }
+  if (ONLINE && ws) {
+    try { ws.close(); } catch {}
+    ws = null;
+    wsReady = false;
+    wsRoom = null;
+  }
 
   state = {
     ...state,
