@@ -967,6 +967,7 @@ function getRoomSnapshot() {
 // In online mode, advance must be server-driven and happen once per question.
 let onlineAdvanceForQ = null;
 let onlineAdvanceTimer = null;
+let resultsShown = false;
 function scheduleOnlineAdvance(q) {
   if (!ONLINE) return;
   if (q == null) return;
@@ -1385,6 +1386,7 @@ function loadQuestion() {
   state.answered = false;
   state.timeLeft = TIME_PER_QUESTION;
   state.lastOppAnswer = null;
+  resultsShown = false;
   onlineAdvanceForQ = null;
   if (onlineAdvanceTimer) { clearTimeout(onlineAdvanceTimer); onlineAdvanceTimer = null; }
 
@@ -1551,6 +1553,7 @@ function onOpponentAnswered(oppIndex) {
 }
 
 function nextQuestion() {
+  if (resultsShown) return;
   state.currentQ++;
   if (state.currentQ < QUESTION_COUNT) {
     loadQuestion();
@@ -1562,6 +1565,10 @@ function nextQuestion() {
 
 // ─── RESULTS ───────────────────────────────────────────────────────
 function showResults() {
+  if (resultsShown) return;
+  resultsShown = true;
+  if (onlineAdvanceTimer) { clearTimeout(onlineAdvanceTimer); onlineAdvanceTimer = null; }
+
   const room = getRoomSnapshot();
   const hostScore = (ONLINE ? undefined : room?.hostScore) ?? (state.myRole === 'host' ? state.myScore : state.oppScore);
   const guestScore = (ONLINE ? undefined : room?.guestScore) ?? (state.myRole === 'guest' ? state.myScore : state.oppScore);
@@ -1624,6 +1631,9 @@ function resetGame() {
     if (ONLINE) wsSend({ type: 'leave' });
     else deleteRoom(state.roomCode);
   }
+  resultsShown = false;
+  onlineAdvanceForQ = null;
+  if (onlineAdvanceTimer) { clearTimeout(onlineAdvanceTimer); onlineAdvanceTimer = null; }
 
   state = {
     ...state,
