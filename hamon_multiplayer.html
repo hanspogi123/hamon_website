@@ -960,6 +960,10 @@ let wsReady = false;
 let wsRoom = null; // latest room snapshot from server
 let wsLastError = '';
 
+function getRoomSnapshot() {
+  return ONLINE ? wsRoom : readRoom(state.roomCode);
+}
+
 function wsConnect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   wsReady = false;
@@ -1031,6 +1035,7 @@ function onWsMessage(msg) {
   }
 
   if (msg.type === 'guest_joined') {
+    if (wsRoom) wsRoom = { ...wsRoom, guest: msg.guest || wsRoom.guest };
     // Host updates UI and starts countdown
     if (state.myRole === 'host') {
       const guestName = msg.guest || 'Player 2';
@@ -1201,12 +1206,13 @@ function joinRoom() {
 // ─── WAITING SCREEN ────────────────────────────────────────────────
 function showWaitingScreen() {
   document.getElementById('roomCodeDisplay').textContent = state.roomCode;
-  document.getElementById('slot1Name').textContent = state.myRole === 'host' ? state.myName : readRoom(state.roomCode)?.host || '';
+  const room = getRoomSnapshot();
+  document.getElementById('slot1Name').textContent = state.myRole === 'host' ? state.myName : (room?.host || '');
   if (state.myRole === 'host') {
     document.getElementById('slot1Name').textContent = state.myName;
   }
   showScreen('waitingScreen');
-  startPoll('waiting');
+  if (!ONLINE) startPoll('waiting');
 }
 
 function copyCode() {
@@ -1319,7 +1325,13 @@ function runCountdown(n, cb) {
 
 // ─── QUESTION PHASE ────────────────────────────────────────────────
 function startQuestionPhase() {
-  const room = readRoom(state.roomCode);
+  const room = getRoomSnapshot();
+  if (!room) {
+    showNotif('⚠️ Hindi mabasa ang room data. Subukan ulit mag-create/join.');
+    resetGame();
+    return;
+  }
+
   state.myName = state.myRole === 'host' ? room.host : room.guest;
 
   document.getElementById('liveYourName').textContent = state.myName;
@@ -1330,7 +1342,7 @@ function startQuestionPhase() {
   state.lastOppAnswer = null;
   showScreen('questionScreen');
   loadQuestion();
-  startPoll('question');
+  if (!ONLINE) startPoll('question');
 }
 
 function loadQuestion() {
@@ -1512,7 +1524,7 @@ function nextQuestion() {
 
 // ─── RESULTS ───────────────────────────────────────────────────────
 function showResults() {
-  const room = readRoom(state.roomCode);
+  const room = getRoomSnapshot();
   const hostScore = room?.hostScore ?? (state.myRole === 'host' ? state.myScore : state.oppScore);
   const guestScore = room?.guestScore ?? (state.myRole === 'guest' ? state.myScore : state.oppScore);
 
