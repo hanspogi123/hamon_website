@@ -1069,6 +1069,8 @@ function onWsMessage(msg) {
   }
 
   if (msg.type === 'opp_answer') {
+    // Server broadcasts to both clients; ignore our own answer echo.
+    if (msg.by && msg.by === state.myRole) return;
     if (wsRoom) {
       wsRoom = {
         ...wsRoom,
@@ -1085,6 +1087,7 @@ function onWsMessage(msg) {
   }
 
   if (msg.type === 'both_answered') {
+    // `both_answered` is fine to accept for both clients, but only advance once *we* have answered.
     if (wsRoom) {
       wsRoom = {
         ...wsRoom,
