@@ -9,6 +9,21 @@ const PORT = Number(process.env.PORT || 8080);
  */
 const rooms = new Map(); // code -> room
 
+function publicRoom(room) {
+  return {
+    code: room.code,
+    stake: room.stake,
+    host: room.host,
+    guest: room.guest,
+    questions: room.questions,
+    status: room.status,
+    countdownStart: room.countdownStart,
+    currentQ: room.currentQ,
+    hostScore: room.hostScore,
+    guestScore: room.guestScore,
+  };
+}
+
 function genCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let out = "";
@@ -101,14 +116,7 @@ wss.on("connection", (ws) => {
       safeSend(ws, {
         type: "created",
         code,
-        room: {
-          code,
-          stake,
-          host: room.host,
-          guest: room.guest,
-          questions: room.questions,
-          status: room.status,
-        },
+        room: publicRoom(room),
       });
 
       return;
@@ -141,17 +149,10 @@ wss.on("connection", (ws) => {
       safeSend(ws, {
         type: "joined",
         code,
-        room: {
-          code,
-          stake: room.stake,
-          host: room.host,
-          guest: room.guest,
-          questions: room.questions,
-          status: room.status,
-        },
+        room: publicRoom(room),
       });
 
-      broadcast(code, { type: "guest_joined", guest: name });
+      broadcast(code, { type: "guest_joined", guest: name, room: publicRoom(room) });
       return;
     }
 
@@ -177,7 +178,7 @@ wss.on("connection", (ws) => {
       room.countdownStart = now();
       room.updatedAt = now();
 
-      broadcast(code, { type: "countdown", countdownStart: room.countdownStart });
+      broadcast(code, { type: "countdown", countdownStart: room.countdownStart, room: publicRoom(room) });
       return;
     }
 

@@ -1035,7 +1035,8 @@ function onWsMessage(msg) {
   }
 
   if (msg.type === 'guest_joined') {
-    if (wsRoom) wsRoom = { ...wsRoom, guest: msg.guest || wsRoom.guest };
+    if (msg.room) wsRoom = msg.room;
+    else if (wsRoom) wsRoom = { ...wsRoom, guest: msg.guest || wsRoom.guest };
     // Host updates UI and starts countdown
     if (state.myRole === 'host') {
       const guestName = msg.guest || 'Player 2';
@@ -1052,6 +1053,7 @@ function onWsMessage(msg) {
   }
 
   if (msg.type === 'countdown') {
+    if (msg.room) wsRoom = msg.room;
     showScreen('countdownScreen');
     const start = Number(msg.countdownStart || Date.now());
     const elapsedSteps = Math.floor((Date.now() - start) / 800);
@@ -1060,6 +1062,7 @@ function onWsMessage(msg) {
       state.currentQ = 0;
       state.myScore = 0;
       state.oppScore = 0;
+      if (wsRoom?.questions?.length) state.gameQuestions = wsRoom.questions;
       startQuestionPhase();
     });
     return;
