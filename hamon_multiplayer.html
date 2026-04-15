@@ -964,6 +964,21 @@ function getRoomSnapshot() {
   return ONLINE ? wsRoom : readRoom(state.roomCode);
 }
 
+// In online mode, advance must be server-driven and happen once per question.
+let onlineAdvanceForQ = null;
+let onlineAdvanceTimer = null;
+function scheduleOnlineAdvance(q) {
+  if (!ONLINE) return;
+  if (q == null) return;
+  if (onlineAdvanceForQ === q) return;
+  onlineAdvanceForQ = q;
+  if (onlineAdvanceTimer) clearTimeout(onlineAdvanceTimer);
+  onlineAdvanceTimer = setTimeout(() => {
+    // Only advance if we're still on that question.
+    if (state.currentQ === q) nextQuestion();
+  }, 350);
+}
+
 function wsConnect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   wsReady = false;
@@ -1097,7 +1112,7 @@ function onWsMessage(msg) {
     }
     // Let the existing client logic advance when it’s ready.
     if (typeof msg.q === 'number' && msg.q === state.currentQ && state.answered) {
-      setTimeout(nextQuestion, 250);
+      scheduleOnlineAdvance(msg.q);
     }
     return;
   }
@@ -1370,6 +1385,8 @@ function loadQuestion() {
   state.answered = false;
   state.timeLeft = TIME_PER_QUESTION;
   state.lastOppAnswer = null;
+  onlineAdvanceForQ = null;
+  if (onlineAdvanceTimer) { clearTimeout(onlineAdvanceTimer); onlineAdvanceTimer = null; }
 
   document.getElementById('answerStatusBar').style.display = 'none';
   document.getElementById('questionProgress').textContent = `Tanong ${state.currentQ + 1} / ${QUESTION_COUNT}`;
@@ -1527,7 +1544,8 @@ function onOpponentAnswered(oppIndex) {
     bar.className = 'answer-status-bar both-answered';
     bar.innerHTML = '✅ Pareho na kayong nakasagot!';
     bar.style.display = 'flex';
-    setTimeout(nextQuestion, 900);
+    // In online mode, advance only on `both_answered` to avoid double-advance/skips.
+    if (!ONLINE) setTimeout(nextQuestion, 900);
   }
   // else: opponent answered first, we wait for player — poll will keep checking
 }
