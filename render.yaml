@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: hamon-multiplayer-ws
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+

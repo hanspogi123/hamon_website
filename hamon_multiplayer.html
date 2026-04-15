@@ -911,12 +911,15 @@ const QUESTION_COUNT = 5;
 const TIME_PER_QUESTION = 15;
 const letters = ['A','B','C','D'];
 
-// ─── SHARED STATE (simulated real-time via localStorage) ──────────────
-// In a real deployment, replace STORAGE with WebSocket / Firebase / Supabase
-// Here we use localStorage + polling so two tabs/windows on same device work,
-// which demonstrates the multiplayer logic perfectly.
+// ─── MULTIPLAYER MODE ────────────────────────────────────────────────
+// Default mode (no server): "Local" multiplayer via localStorage + storage events (2 tabs / same browser profile).
+// Online mode: add `?online=1&server=ws://localhost:8080` (or `wss://...`) to use the WebSocket server.
+const qs = new URLSearchParams(location.search);
+const ONLINE = qs.get('online') === '1';
+const DEFAULT_RENDER_URL = 'wss://RENDER-SERVICE-URL.onrender.com';
+const SERVER_URL = qs.get('server') || (ONLINE ? DEFAULT_RENDER_URL : 'ws://localhost:8080');
 
-const POLL_INTERVAL = 500; // ms
+const POLL_INTERVAL = 800; // ms (fallback only; storage events do most of the work)
 
 let state = {
   coins: 500,
@@ -935,7 +938,7 @@ let state = {
   lastOppAnswer: null,
 };
 
-// ─── STORAGE HELPERS ───────────────────────────────────────────────
+// ─── LOCAL STORAGE HELPERS (local mode) ─────────────────────────────
 function roomKey(code) { return `hamon_room_${code}`; }
 
 function readRoom(code) {
@@ -949,6 +952,107 @@ function writeRoom(code, data) {
 
 function deleteRoom(code) {
   localStorage.removeItem(roomKey(code));
+}
+
+// ─── ONLINE (WEBSOCKET) ─────────────────────────────────────────────
+let ws = null;
+let wsReady = false;
+let wsRoom = null; // latest room snapshot from server
+
+function wsConnect() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  wsReady = false;
+  ws = new WebSocket(SERVER_URL);
+  ws.addEventListener('open', () => { wsReady = true; });
+  ws.addEventListener('message', (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    onWsMessage(msg);
+  });
+  ws.addEventListener('close', () => { wsReady = false; });
+}
+
+function wsSend(obj) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  ws.send(JSON.stringify(obj));
+  return true;
+}
+
+function onWsMessage(msg) {
+  if (!msg || typeof msg.type !== 'string') return;
+
+  if (msg.type === 'created') {
+    wsRoom = msg.room;
+    state.roomCode = msg.code;
+    showWaitingScreen();
+    return;
+  }
+
+  if (msg.type === 'join_error') {
+    setError('joinError', msg.message || 'Hindi makasali sa room.');
+    return;
+  }
+
+  if (msg.type === 'joined') {
+    wsRoom = msg.room;
+    state.roomCode = msg.code;
+    state.stake = wsRoom.stake;
+    state.gameQuestions = wsRoom.questions;
+    showWaitingScreen();
+    return;
+  }
+
+  if (msg.type === 'guest_joined') {
+    // Host updates UI and starts countdown
+    if (state.myRole === 'host') {
+      const guestName = msg.guest || 'Player 2';
+      document.getElementById('slot2').classList.add('filled');
+      document.getElementById('slot2').querySelector('.slot-name').textContent = guestName;
+      document.getElementById('slot2').querySelector('.slot-avatar').textContent = '👤';
+      document.getElementById('slot2Status').textContent = '✓ Handa';
+      document.getElementById('waitingMsg').textContent = 'Pareho kayong handa! Magsisimula na...';
+      document.getElementById('waitingDots').style.display = 'none';
+
+      setTimeout(() => wsSend({ type: 'start_countdown' }), 600);
+    }
+    return;
+  }
+
+  if (msg.type === 'countdown') {
+    showScreen('countdownScreen');
+    const start = Number(msg.countdownStart || Date.now());
+    const elapsedSteps = Math.floor((Date.now() - start) / 800);
+    const remaining = Math.max(0, 3 - elapsedSteps);
+    runCountdown(remaining, () => {
+      state.currentQ = 0;
+      state.myScore = 0;
+      state.oppScore = 0;
+      startQuestionPhase();
+    });
+    return;
+  }
+
+  if (msg.type === 'opp_answer') {
+    if (typeof msg.q === 'number' && msg.q === state.currentQ) {
+      state.oppScore = state.myRole === 'host' ? (msg.guestScore || 0) : (msg.hostScore || 0);
+      document.getElementById('liveOppScore').textContent = state.oppScore;
+      onOpponentAnswered(msg.index);
+    }
+    return;
+  }
+
+  if (msg.type === 'both_answered') {
+    // Let the existing client logic advance when it’s ready.
+    if (typeof msg.q === 'number' && msg.q === state.currentQ && state.answered) {
+      setTimeout(nextQuestion, 250);
+    }
+    return;
+  }
+
+  if (msg.type === 'room_closed') {
+    handleDisconnect();
+    return;
+  }
 }
 
 function genCode() {
@@ -1002,9 +1106,24 @@ function createRoom() {
 
   state.myName = name;
   state.myRole = 'host';
-  state.roomCode = genCode();
   state.gameQuestions = getRandomQuestions();
 
+  if (ONLINE) {
+    wsConnect();
+    // Wait briefly for socket to open, then send create.
+    const start = Date.now();
+    const t = setInterval(() => {
+      if (wsReady && wsSend({ type: 'create', name, stake: state.stake, questions: state.gameQuestions })) {
+        clearInterval(t);
+      } else if (Date.now() - start > 4000) {
+        clearInterval(t);
+        setError('createError', 'Hindi makakonekta sa server. Ayusin ang ?server= URL.');
+      }
+    }, 120);
+    return;
+  }
+
+  state.roomCode = genCode();
   writeRoom(state.roomCode, {
     host: name,
     guest: null,
@@ -1030,14 +1149,29 @@ function joinRoom() {
 
   if (code.length !== 4) { setError('joinError','Ilagay ang 4-character na room code.'); return; }
 
+  state.myName = name;
+  state.myRole = 'guest';
+  state.roomCode = code;
+
+  if (ONLINE) {
+    wsConnect();
+    const start = Date.now();
+    const t = setInterval(() => {
+      if (wsReady && wsSend({ type: 'join', code, name })) {
+        clearInterval(t);
+      } else if (Date.now() - start > 4000) {
+        clearInterval(t);
+        setError('joinError', 'Hindi makakonekta sa server. Ayusin ang ?server= URL.');
+      }
+    }, 120);
+    return;
+  }
+
   const room = readRoom(code);
   if (!room) { setError('joinError','Hindi mahanap ang room. Tiyakin ang code.'); return; }
   if (room.guest) { setError('joinError','Puno na ang room na ito!'); return; }
   if (room.status !== 'waiting') { setError('joinError','Nagsimula na ang laro sa room na ito.'); return; }
 
-  state.myName = name;
-  state.myRole = 'guest';
-  state.roomCode = code;
   state.gameQuestions = room.questions;
   state.stake = room.stake;
 
@@ -1073,7 +1207,11 @@ function copyCode() {
 
 function cancelWaiting() {
   stopPoll();
-  deleteRoom(state.roomCode);
+  if (ONLINE) {
+    wsSend({ type: 'leave' });
+  } else {
+    deleteRoom(state.roomCode);
+  }
   resetGame();
 }
 
@@ -1089,6 +1227,7 @@ function stopPoll() {
 
 let _lastPollMode = '';
 function poll(mode) {
+  if (ONLINE) return; // server pushes events
   const room = readRoom(state.roomCode);
   if (!room) { handleDisconnect(); return; }
 
@@ -1128,6 +1267,7 @@ function poll(mode) {
 
 // ─── COUNTDOWN ─────────────────────────────────────────────────────
 function startCountdownPhase(room) {
+  if (ONLINE) return;
   const updatedRoom = readRoom(state.roomCode);
   writeRoom(state.roomCode, { ...updatedRoom, status: 'countdown', countdownStart: Date.now() });
   showScreen('countdownScreen');
@@ -1260,15 +1400,19 @@ function selectAnswer(index) {
   document.getElementById('liveYourScore').textContent = state.myScore;
 
   // Write answer to shared room
-  const room = readRoom(state.roomCode);
-  if (room) {
-    const answerKey = state.myRole === 'host' ? 'hostAnswers' : 'guestAnswers';
-    const scoreKey = state.myRole === 'host' ? 'hostScore' : 'guestScore';
-    writeRoom(state.roomCode, {
-      ...room,
-      [answerKey]: { ...room[answerKey], [String(state.currentQ)]: index },
-      [scoreKey]: state.myScore,
-    });
+  if (ONLINE) {
+    wsSend({ type: 'answer', q: state.currentQ, index, score: state.myScore });
+  } else {
+    const room = readRoom(state.roomCode);
+    if (room) {
+      const answerKey = state.myRole === 'host' ? 'hostAnswers' : 'guestAnswers';
+      const scoreKey = state.myRole === 'host' ? 'hostScore' : 'guestScore';
+      writeRoom(state.roomCode, {
+        ...room,
+        [answerKey]: { ...room[answerKey], [String(state.currentQ)]: index },
+        [scoreKey]: state.myScore,
+      });
+    }
   }
 
   showAnswerStatus();
@@ -1283,24 +1427,31 @@ function timeOut() {
     if (i === q.answer) btn.classList.add('reveal');
   });
 
-  // Write timeout (-1) to room
-  const room = readRoom(state.roomCode);
-  if (room) {
-    const answerKey = state.myRole === 'host' ? 'hostAnswers' : 'guestAnswers';
-    writeRoom(state.roomCode, {
-      ...room,
-      [answerKey]: { ...room[answerKey], [String(state.currentQ)]: -1 },
-    });
+  if (ONLINE) {
+    wsSend({ type: 'answer', q: state.currentQ, index: -1, score: state.myScore });
+  } else {
+    // Write timeout (-1) to room
+    const room = readRoom(state.roomCode);
+    if (room) {
+      const answerKey = state.myRole === 'host' ? 'hostAnswers' : 'guestAnswers';
+      writeRoom(state.roomCode, {
+        ...room,
+        [answerKey]: { ...room[answerKey], [String(state.currentQ)]: -1 },
+      });
+    }
   }
 
   showAnswerStatus();
 }
 
 function showAnswerStatus() {
-  // Check if opp already answered
-  const room = readRoom(state.roomCode);
-  const oppAnswers = room ? (state.myRole === 'host' ? room.guestAnswers : room.hostAnswers) : {};
-  const oppAlreadyAnswered = oppAnswers[String(state.currentQ)] !== undefined;
+  // Check if opp already answered (local mode only; online mode uses server events)
+  let oppAlreadyAnswered = false;
+  if (!ONLINE) {
+    const room = readRoom(state.roomCode);
+    const oppAnswers = room ? (state.myRole === 'host' ? room.guestAnswers : room.hostAnswers) : {};
+    oppAlreadyAnswered = oppAnswers[String(state.currentQ)] !== undefined;
+  }
 
   const bar = document.getElementById('answerStatusBar');
   bar.style.display = 'flex';
@@ -1320,11 +1471,13 @@ function onOpponentAnswered(oppIndex) {
   document.getElementById('oppStatusDot').className = 'status-dot answered';
   document.getElementById('oppStatusText').textContent = 'Nakasagot na';
 
-  // Update opp score display
-  const room = readRoom(state.roomCode);
-  if (room) {
-    state.oppScore = state.myRole === 'host' ? (room.guestScore || 0) : (room.hostScore || 0);
-    document.getElementById('liveOppScore').textContent = state.oppScore;
+  // Update opp score display (local mode reads from storage; online mode updated from server message)
+  if (!ONLINE) {
+    const room = readRoom(state.roomCode);
+    if (room) {
+      state.oppScore = state.myRole === 'host' ? (room.guestScore || 0) : (room.hostScore || 0);
+      document.getElementById('liveOppScore').textContent = state.oppScore;
+    }
   }
 
   if (state.answered) {
@@ -1408,7 +1561,10 @@ function handleDisconnect() {
 function resetGame() {
   stopPoll();
   clearInterval(state.timer);
-  if (state.roomCode) deleteRoom(state.roomCode);
+  if (state.roomCode) {
+    if (ONLINE) wsSend({ type: 'leave' });
+    else deleteRoom(state.roomCode);
+  }
 
   state = {
     ...state,
@@ -1443,9 +1599,16 @@ document.getElementById('roomCodeInput').addEventListener('input', function() {
   this.value = this.value.toUpperCase();
 });
 
-// ─── CLEANUP on unload ─────────────────────────────────────────────
-window.addEventListener('beforeunload', () => {
-  if (state.roomCode) deleteRoom(state.roomCode);
+// ─── CROSS-TAB SYNC (local mode) ────────────────────────────────────
+// `storage` events are delivered even when tabs are backgrounded (unlike setInterval which can be throttled).
+window.addEventListener('storage', (e) => {
+  if (ONLINE) return;
+  if (!state.roomCode) return;
+  if (e.key !== roomKey(state.roomCode)) return;
+  // Nudge the poll logic immediately when the room changes.
+  poll('waiting');
+  poll('guest_joined');
+  poll('question');
 });
 </script>
 </body>

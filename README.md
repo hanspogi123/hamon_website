@@ -17,7 +17,10 @@ Your site will be available at:
 
 ## How to test the “multiplayer”
 
-This build simulates real-time multiplayer using **`localStorage` + polling** (no server).
+This project supports:
+
+- **Local mode**: simulated real-time using **`localStorage` + cross-tab events** (no server).
+- **Online mode**: real multiplayer using a **WebSocket server** (works across devices).
 
 To test:
 
@@ -29,6 +32,29 @@ To test:
 
 Notes:
 
-- This is best for testing UI/game flow and the sync logic.
-- It will **not** work as true internet multiplayer between different devices, because `localStorage` does not sync between devices.
+- Local mode is best for testing UI/game flow quickly.
+- Online mode is required for true internet multiplayer (different devices).
+
+## Deploy the WebSocket server (Render)
+
+This repo includes `render.yaml` for one-click-ish deployment.
+
+1. Create a Render account, then click **New** → **Blueprint**
+2. Select this GitHub repository
+3. Deploy
+
+After deploy, Render will give you a URL like:
+
+- `https://hamon-multiplayer-ws-xxxx.onrender.com`
+
+For the game, you must use **WSS**:
+
+- `wss://hamon-multiplayer-ws-xxxx.onrender.com`
+
+### Open the game in online mode
+
+Use query params:
+
+- `hamon_multiplayer.html?online=1&server=wss://hamon-multiplayer-ws-xxxx.onrender.com`
+
 
