@@ -916,7 +916,7 @@ const letters = ['A','B','C','D'];
 // Online mode: add `?online=1&server=ws://localhost:8080` (or `wss://...`) to use the WebSocket server.
 const qs = new URLSearchParams(location.search);
 const ONLINE = qs.get('online') === '1';
-const DEFAULT_RENDER_URL = 'wss://RENDER-SERVICE-URL.onrender.com';
+const DEFAULT_RENDER_URL = 'wss://hamon-multiplayer-ws.onrender.com';
 const SERVER_URL = qs.get('server') || (ONLINE ? DEFAULT_RENDER_URL : 'ws://localhost:8080');
 
 const POLL_INTERVAL = 800; // ms (fallback only; storage events do most of the work)
