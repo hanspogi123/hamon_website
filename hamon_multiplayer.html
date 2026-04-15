@@ -958,12 +958,18 @@ function deleteRoom(code) {
 let ws = null;
 let wsReady = false;
 let wsRoom = null; // latest room snapshot from server
+let wsLastError = '';
 
 function wsConnect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
   wsReady = false;
+  wsLastError = '';
   ws = new WebSocket(SERVER_URL);
   ws.addEventListener('open', () => { wsReady = true; });
+  ws.addEventListener('error', () => {
+    // Browsers don't expose much detail here; still useful to know it errored.
+    wsLastError = 'WebSocket error';
+  });
   ws.addEventListener('message', (ev) => {
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
@@ -976,6 +982,28 @@ function wsSend(obj) {
   if (!ws || ws.readyState !== WebSocket.OPEN) return false;
   ws.send(JSON.stringify(obj));
   return true;
+}
+
+function wsEnsureAndSend(payload, errorElId) {
+  wsConnect();
+  const start = Date.now();
+  const MAX_WAIT = 30000; // Render can take a while to wake from sleep
+  const tick = 200;
+
+  if (errorElId) setError(errorElId, 'Kumokonekta sa server... (maaaring magtagal kapag naka-sleep)');
+
+  const t = setInterval(() => {
+    if (wsReady && wsSend(payload)) {
+      clearInterval(t);
+      if (errorElId) setError(errorElId, '');
+      return;
+    }
+    if (Date.now() - start > MAX_WAIT) {
+      clearInterval(t);
+      const extra = wsLastError ? ` (${wsLastError})` : '';
+      if (errorElId) setError(errorElId, `Hindi makakonekta sa server. Subukan ulit sa loob ng 30s, o i-check ang ?server= URL.${extra}`);
+    }
+  }, tick);
 }
 
 function onWsMessage(msg) {
@@ -1109,17 +1137,7 @@ function createRoom() {
   state.gameQuestions = getRandomQuestions();
 
   if (ONLINE) {
-    wsConnect();
-    // Wait briefly for socket to open, then send create.
-    const start = Date.now();
-    const t = setInterval(() => {
-      if (wsReady && wsSend({ type: 'create', name, stake: state.stake, questions: state.gameQuestions })) {
-        clearInterval(t);
-      } else if (Date.now() - start > 4000) {
-        clearInterval(t);
-        setError('createError', 'Hindi makakonekta sa server. Ayusin ang ?server= URL.');
-      }
-    }, 120);
+    wsEnsureAndSend({ type: 'create', name, stake: state.stake, questions: state.gameQuestions }, 'createError');
     return;
   }
 
@@ -1154,16 +1172,7 @@ function joinRoom() {
   state.roomCode = code;
 
   if (ONLINE) {
-    wsConnect();
-    const start = Date.now();
-    const t = setInterval(() => {
-      if (wsReady && wsSend({ type: 'join', code, name })) {
-        clearInterval(t);
-      } else if (Date.now() - start > 4000) {
-        clearInterval(t);
-        setError('joinError', 'Hindi makakonekta sa server. Ayusin ang ?server= URL.');
-      }
-    }, 120);
+    wsEnsureAndSend({ type: 'join', code, name }, 'joinError');
     return;
   }
 
