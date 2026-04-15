@@ -1069,6 +1069,13 @@ function onWsMessage(msg) {
   }
 
   if (msg.type === 'opp_answer') {
+    if (wsRoom) {
+      wsRoom = {
+        ...wsRoom,
+        hostScore: msg.hostScore ?? wsRoom.hostScore,
+        guestScore: msg.guestScore ?? wsRoom.guestScore,
+      };
+    }
     if (typeof msg.q === 'number' && msg.q === state.currentQ) {
       state.oppScore = state.myRole === 'host' ? (msg.guestScore || 0) : (msg.hostScore || 0);
       document.getElementById('liveOppScore').textContent = state.oppScore;
@@ -1078,6 +1085,13 @@ function onWsMessage(msg) {
   }
 
   if (msg.type === 'both_answered') {
+    if (wsRoom) {
+      wsRoom = {
+        ...wsRoom,
+        hostScore: msg.hostScore ?? wsRoom.hostScore,
+        guestScore: msg.guestScore ?? wsRoom.guestScore,
+      };
+    }
     // Let the existing client logic advance when it’s ready.
     if (typeof msg.q === 'number' && msg.q === state.currentQ && state.answered) {
       setTimeout(nextQuestion, 250);
@@ -1528,8 +1542,8 @@ function nextQuestion() {
 // ─── RESULTS ───────────────────────────────────────────────────────
 function showResults() {
   const room = getRoomSnapshot();
-  const hostScore = room?.hostScore ?? (state.myRole === 'host' ? state.myScore : state.oppScore);
-  const guestScore = room?.guestScore ?? (state.myRole === 'guest' ? state.myScore : state.oppScore);
+  const hostScore = (ONLINE ? undefined : room?.hostScore) ?? (state.myRole === 'host' ? state.myScore : state.oppScore);
+  const guestScore = (ONLINE ? undefined : room?.guestScore) ?? (state.myRole === 'guest' ? state.myScore : state.oppScore);
 
   const myFinalScore = state.myRole === 'host' ? hostScore : guestScore;
   const oppFinalScore = state.myRole === 'host' ? guestScore : hostScore;
