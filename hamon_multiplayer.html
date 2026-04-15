@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HAMON — Real-Time Multiplayer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c27;
+    --accent: #f5c842;
+    --accent2: #ff6b35;
+    --text: #f0f0f5;
+    --text-muted: #6b6b80;
+    --correct: #22c55e;
+    --wrong: #ef4444;
+    --border: rgba(245, 200, 66, 0.15);
+    --border2: rgba(255,255,255,0.06);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(ellipse at 60% 20%, rgba(245,200,66,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 20% 80%, rgba(255,107,53,0.05) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .game-wrapper {
+    width: 100%;
+    max-width: 560px;
+    padding: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: -4px;
+  }
+
+  .coin-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 8px 16px;
+  }
+
+  .coin-amount {
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  /* SCREENS */
+  .screen { display: none; animation: fadeUp 0.35s ease; }
+  .screen.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 36px 32px;
+    text-align: center;
+  }
+
+  /* LOBBY */
+  .mode-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 28px;
+    background: var(--surface2);
+    border-radius: 14px;
+    padding: 6px;
+  }
+
+  .mode-tab {
+    padding: 11px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.3px;
+  }
+
+  .mode-tab.active {
+    background: var(--surface);
+    color: var(--accent);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  }
+
+  .lobby-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 10px;
+    letter-spacing: -1px;
+  }
+
+  .lobby-sub {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+    line-height: 1.6;
+  }
+
+  .name-input-wrap {
+    position: relative;
+    margin-bottom: 14px;
+  }
+
+  .name-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1.5px solid var(--border2);
+    border-radius: 14px;
+    padding: 14px 18px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .name-input:focus { border-color: var(--accent); }
+  .name-input::placeholder { color: var(--text-muted); }
+
+  .room-input-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .stake-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .stake-btn {
+    background: var(--surface2);
+    border: 1.5px solid transparent;
+    border-radius: 14px;
+    padding: 14px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .stake-btn:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .stake-btn.selected { border-color: var(--accent); background: rgba(245,200,66,0.08); }
+
+  .stake-amount {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--accent);
+    display: block;
+  }
+
+  .stake-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; display: block; }
+
+  .btn-primary {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 14px;
+    color: #0a0a0f;
+    font-family: 'Syne', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    transition: all 0.2s;
+  }
+
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,200,66,0.3); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .btn-secondary {
+    width: 100%;
+    padding: 14px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 10px;
+  }
+
+  .btn-secondary:hover { border-color: var(--accent); }
+
+  /* WAITING ROOM */
+  .waiting-room {
+    text-align: center;
+    padding: 40px 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+  }
+
+  .room-code-display {
+    font-family: 'Syne', sans-serif;
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: 10px;
+    color: var(--accent);
+    background: var(--surface2);
+    border-radius: 16px;
+    padding: 20px;
+    margin: 20px 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid var(--border);
+  }
+
+  .room-code-display:hover { border-color: var(--accent); }
+
+  .waiting-dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px 0;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: dotPulse 1.4s ease-in-out infinite;
+  }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dotPulse {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  .player-slots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 24px 0;
+  }
+
+  .player-slot {
+    background: var(--surface2);
+    border: 1.5px solid var(--border2);
+    border-radius: 16px;
+    padding: 18px 14px;
+    transition: all 0.3s;
+  }
+
+  .player-slot.filled {
+    border-color: rgba(34,197,94,0.4);
+    background: rgba(34,197,94,0.05);
+  }
+
+  .slot-avatar {
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+
+  .slot-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .slot-status {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+  }
+
+  .player-slot.filled .slot-status { color: var(--correct); }
+
+  /* COUNTDOWN */
+  .countdown-screen { text-align: center; padding: 60px 20px; }
+
+  .countdown-number {
+    font-family: 'Syne', sans-serif;
+    font-size: 120px;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: scalePop 0.7s ease-in-out infinite;
+  }
+
+  @keyframes scalePop {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+
+  .countdown-label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 16px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* LIVE SCOREBOARD */
+  .live-scoreboard {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+
+  .live-player {
+    text-align: center;
+  }
+
+  .live-player-name {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .live-player-score {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+
+  .live-player.opp .live-player-score { color: var(--text); }
+
+  .live-vs {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 0 4px;
+  }
+
+  .opponent-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    justify-content: center;
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+
+  .status-dot.answered { background: var(--correct); }
+  .status-dot.waiting { background: var(--accent); animation: dotPulse 1s infinite; }
+
+  /* QUESTION */
+  .question-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  .question-progress {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .timer-ring {
+    position: relative;
+    width: 52px; height: 52px;
+  }
+
+  .timer-ring svg {
+    transform: rotate(-90deg);
+    width: 52px; height: 52px;
+  }
+
+  .timer-ring circle { fill: none; stroke-width: 3; }
+  .timer-bg { stroke: var(--surface2); }
+  .timer-fill {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-dasharray: 138;
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset 1s linear, stroke 0.3s;
+  }
+
+  .timer-text {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--accent);
+  }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--surface2);
+    border-radius: 100px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 100px;
+    transition: width 0.4s ease;
+  }
+
+  .question-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 14px;
+  }
+
+  .question-category {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .question-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: -0.3px;
+  }
+
+  .choices-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .choice-btn {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .choice-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: rgba(245,200,66,0.06);
+    transform: translateY(-2px);
+  }
+
+  .choice-btn.correct { border-color: var(--correct); background: rgba(34,197,94,0.1); color: var(--correct); }
+  .choice-btn.wrong { border-color: var(--wrong); background: rgba(239,68,68,0.1); color: var(--wrong); }
+  .choice-btn.reveal { border-color: var(--correct); background: rgba(34,197,94,0.06); color: var(--correct); }
+
+  .choice-letter {
+    display: inline-block;
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    background: var(--surface2);
+    text-align: center;
+    line-height: 22px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 8px;
+    color: var(--text-muted);
+  }
+
+  .choice-btn.correct .choice-letter { background: rgba(34,197,94,0.2); color: var(--correct); }
+  .choice-btn.wrong .choice-letter { background: rgba(239,68,68,0.2); color: var(--wrong); }
+  .choice-btn.reveal .choice-letter { background: rgba(34,197,94,0.2); color: var(--correct); }
+
+  /* WAITING FOR OPPONENT OVERLAY */
+  .answer-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    margin-top: 14px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .answer-status-bar.waiting-opp {
+    background: rgba(245,200,66,0.08);
+    color: var(--accent);
+    border: 1px solid rgba(245,200,66,0.2);
+  }
+
+  .answer-status-bar.both-answered {
+    background: rgba(34,197,94,0.08);
+    color: var(--correct);
+    border: 1px solid rgba(34,197,94,0.2);
+  }
+
+  /* RESULTS */
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px 32px;
+    text-align: center;
+  }
+
+  .result-emoji {
+    font-size: 64px;
+    margin-bottom: 16px;
+    display: block;
+    animation: bounce 0.6s ease;
+  }
+
+  @keyframes bounce {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+
+  .result-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+  }
+
+  .result-title.win { color: var(--correct); }
+  .result-title.loss { color: var(--wrong); }
+  .result-title.draw { color: var(--accent); }
+
+  .result-sub { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+
+  .score-breakdown {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 12px;
+    align-items: center;
+    background: var(--surface2);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .score-side { text-align: center; }
+  .score-name { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .score-num { font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800; }
+  .score-num.you { color: var(--accent); }
+  .score-num.opp { color: var(--text); }
+  .score-vs { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+
+  .coin-result {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding: 14px;
+    border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+  }
+
+  .coin-result.gain { background: rgba(34,197,94,0.1); color: var(--correct); }
+  .coin-result.lose { background: rgba(239,68,68,0.1); color: var(--wrong); }
+  .coin-result.neutral { background: rgba(245,200,66,0.1); color: var(--accent); }
+
+  /* NOTIFICATION */
+  .notif {
+    position: fixed;
+    top: 20px; left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    z-index: 999;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    white-space: nowrap;
+  }
+
+  .notif.show { transform: translateX(-50%) translateY(0); }
+
+  /* ERROR */
+  .error-msg {
+    color: var(--wrong);
+    font-size: 12px;
+    margin-top: 8px;
+    text-align: center;
+    min-height: 18px;
+  }
+
+  /* DISCONNECTED */
+  .disconnected-banner {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--wrong);
+    text-align: center;
+    margin-bottom: 16px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="notif" id="notif"></div>
+
+<div class="game-wrapper">
+  <div class="header">
+    <div>
+      <div class="logo">HAMON</div>
+      <div class="logo-sub">Real-time Multiplayer</div>
+    </div>
+    <div class="coin-display">
+      <span>🪙</span>
+      <span class="coin-amount" id="coinDisplay">500</span>
+    </div>
+  </div>
+
+  <!-- LOBBY -->
+  <div class="screen active" id="lobbyScreen">
+    <div class="card">
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tabCreate" onclick="switchTab('create')">🎯 Gumawa ng Laro</button>
+        <button class="mode-tab" id="tabJoin" onclick="switchTab('join')">🔗 Sumali sa Laro</button>
+      </div>
+
+      <!-- CREATE MODE -->
+      <div id="createMode">
+        <div class="lobby-title">Handa ka na ba?</div>
+        <p class="lobby-sub">Gumawa ng room at i-share ang code sa kaibigan mo.</p>
+
+        <div class="name-input-wrap">
+          <input type="text" class="name-input" id="playerNameCreate" placeholder="Ang iyong pangalan..." maxlength="16">
+        </div>
+
+        <div class="stake-selector" id="stakeSelector">
+          <button class="stake-btn selected" data-stake="25" onclick="selectStake(this)">
+            <span class="stake-amount">25</span>
+            <span class="stake-label">🪙 coins</span>
+          </button>
+          <button class="stake-btn" data-stake="50" onclick="selectStake(this)">
+            <span class="stake-amount">50</span>
+            <span class="stake-label">🪙 coins</span>
+          </button>
+          <button class="stake-btn" data-stake="100" onclick="selectStake(this)">
+            <span class="stake-amount">100</span>
+            <span class="stake-label">🪙 coins</span>
+          </button>
+        </div>
+
+        <button class="btn-primary" onclick="createRoom()">⚡ Gumawa ng Room</button>
+        <div class="error-msg" id="createError"></div>
+      </div>
+
+      <!-- JOIN MODE -->
+      <div id="joinMode" style="display:none">
+        <div class="lobby-title">Sumali sa Laro</div>
+        <p class="lobby-sub">Ilagay ang room code na ibinigay ng iyong kalaban.</p>
+
+        <div class="name-input-wrap">
+          <input type="text" class="name-input" id="playerNameJoin" placeholder="Ang iyong pangalan..." maxlength="16">
+        </div>
+
+        <div class="room-input-row">
+          <input type="text" class="name-input" id="roomCodeInput" placeholder="Room code (e.g. AB12)" maxlength="4" style="text-transform:uppercase; letter-spacing:4px; font-family:'Syne',sans-serif; font-weight:800; font-size:18px;">
+          <button class="btn-primary" style="width:auto; padding:14px 20px; font-size:14px;" onclick="joinRoom()">Sumali</button>
+        </div>
+        <div class="error-msg" id="joinError"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAITING ROOM -->
+  <div class="screen" id="waitingScreen">
+    <div class="waiting-room">
+      <div style="font-size:13px; color:var(--text-muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">Room Code</div>
+      <div class="room-code-display" id="roomCodeDisplay" onclick="copyCode()" title="I-click para kopyahin">----</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:20px;">I-click para kopyahin • I-share sa iyong kalaban</div>
+
+      <div class="player-slots">
+        <div class="player-slot filled" id="slot1">
+          <div class="slot-avatar">👤</div>
+          <div class="slot-name" id="slot1Name">Ikaw</div>
+          <div class="slot-status">✓ Handa</div>
+        </div>
+        <div class="player-slot" id="slot2">
+          <div class="slot-avatar">⏳</div>
+          <div class="slot-name">Kalaban</div>
+          <div class="slot-status" id="slot2Status">Naghihintay...</div>
+        </div>
+      </div>
+
+      <div class="waiting-dots" id="waitingDots">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+
+      <div style="font-size:13px; color:var(--text-muted);" id="waitingMsg">Naghihintay sa kalaban...</div>
+
+      <button class="btn-secondary" onclick="cancelWaiting()" style="margin-top:20px;">✕ Mag-cancel</button>
+    </div>
+  </div>
+
+  <!-- COUNTDOWN -->
+  <div class="screen" id="countdownScreen">
+    <div class="countdown-screen">
+      <div class="countdown-number" id="countdownNum">3</div>
+      <div class="countdown-label" id="countdownLabel">Magsisimula na...</div>
+    </div>
+  </div>
+
+  <!-- QUESTION SCREEN -->
+  <div class="screen" id="questionScreen">
+    <div class="disconnected-banner" id="disconnectedBanner">
+      ⚠️ Nawalan ng koneksyon ang kalaban...
+    </div>
+
+    <div class="live-scoreboard">
+      <div class="live-player">
+        <div class="live-player-name" id="liveYourName">Ikaw</div>
+        <div class="live-player-score" id="liveYourScore">0</div>
+      </div>
+      <div class="live-vs">VS</div>
+      <div class="live-player opp">
+        <div class="live-player-name" id="liveOppName">Kalaban</div>
+        <div class="live-player-score" id="liveOppScore">0</div>
+        <div class="opponent-status" id="oppStatus">
+          <div class="status-dot waiting" id="oppStatusDot"></div>
+          <span id="oppStatusText">Sumasagot...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="question-header">
+      <div class="question-progress" id="questionProgress">Tanong 1 / 5</div>
+      <div class="timer-ring">
+        <svg viewBox="0 0 52 52">
+          <circle class="timer-bg" cx="26" cy="26" r="22"/>
+          <circle class="timer-fill" id="timerRing" cx="26" cy="26" r="22"/>
+        </svg>
+        <div class="timer-text" id="timerText">15</div>
+      </div>
+    </div>
+
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+    </div>
+
+    <div class="question-card">
+      <div class="question-category" id="questionCategory">KASAYSAYAN</div>
+      <div class="question-text" id="questionText">Loading...</div>
+    </div>
+
+    <div class="choices-grid" id="choicesGrid"></div>
+
+    <div class="answer-status-bar" id="answerStatusBar" style="display:none"></div>
+  </div>
+
+  <!-- RESULT SCREEN -->
+  <div class="screen" id="resultScreen">
+    <div class="result-card">
+      <span class="result-emoji" id="resultEmoji">🏆</span>
+      <div class="result-title" id="resultTitle">Nanalo!</div>
+      <div class="result-sub" id="resultSub">Kahanga-hanga ang performance mo!</div>
+
+      <div class="score-breakdown">
+        <div class="score-side">
+          <div class="score-name" id="resultYourName">Ikaw</div>
+          <div class="score-num you" id="yourScore">0</div>
+        </div>
+        <div class="score-vs">vs</div>
+        <div class="score-side">
+          <div class="score-name" id="resultOppName">Kalaban</div>
+          <div class="score-num opp" id="oppScore">0</div>
+        </div>
+      </div>
+
+      <div class="coin-result" id="coinResult">
+        <span>🪙</span>
+        <span id="coinResultText">+50 coins</span>
+      </div>
+
+      <button class="btn-primary" onclick="resetGame()">🔥 Muli pang Sulitin</button>
+      <button class="btn-secondary" onclick="resetGame()">← Bumalik sa Lobby</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── QUESTIONS ──────────────────────────────────────────────────────
+const questions = [
+  { category: "KASAYSAYAN", text: "Sino ang itinuturing na Pambansang Bayani ng Pilipinas?", choices: ["Emilio Aguinaldo","Andrés Bonifacio","José Rizal","Antonio Luna"], answer: 2 },
+  { category: "AGHAM", text: "Ano ang tawag sa pinakamaliit na unit ng buhay?", choices: ["Atom","Selula","Molekula","Tissue"], answer: 1 },
+  { category: "HEOGRAPIYA", text: "Ilang isla ang bumubuo sa Pilipinas ayon sa pinakabagong bilang?", choices: ["7,107","7,641","7,500","7,200"], answer: 1 },
+  { category: "KULTURA", text: "Anong pista opisyal ang ipinagdiriwang tuwing ika-12 ng Hunyo?", choices: ["Araw ng Kagitingan","Araw ng Kalayaan","Araw ng Paggawa","Rizal Day"], answer: 1 },
+  { category: "AGHAM", text: "Anong planeta ang pinakamalapit sa araw?", choices: ["Venus","Mars","Mercury","Jupiter"], answer: 2 },
+  { category: "KASAYSAYAN", text: "Kailan itinatag ang Katipunan ni Andrés Bonifacio?", choices: ["1896","1892","1898","1900"], answer: 1 },
+  { category: "KULTURA", text: "Ano ang pambansang wika ng Pilipinas?", choices: ["Tagalog","Filipino","Bisaya","Ilocano"], answer: 1 },
+  { category: "HEOGRAPIYA", text: "Alin ang pinakamataas na bundok sa Pilipinas?", choices: ["Mt. Mayon","Mt. Pinatubo","Mt. Apo","Mt. Pulag"], answer: 2 },
+  { category: "AGHAM", text: "Anong chemical symbol ang ginagamit para sa tubig?", choices: ["CO2","H2O","O2","NaCl"], answer: 1 },
+  { category: "KASAYSAYAN", text: "Sino ang unang Pangulo ng Pilipinas?", choices: ["Manuel Quezon","Emilio Aguinaldo","Manuel Roxas","Elpidio Quirino"], answer: 1 },
+];
+
+const QUESTION_COUNT = 5;
+const TIME_PER_QUESTION = 15;
+const letters = ['A','B','C','D'];
+
+// ─── SHARED STATE (simulated real-time via localStorage) ──────────────
+// In a real deployment, replace STORAGE with WebSocket / Firebase / Supabase
+// Here we use localStorage + polling so two tabs/windows on same device work,
+// which demonstrates the multiplayer logic perfectly.
+
+const POLL_INTERVAL = 500; // ms
+
+let state = {
+  coins: 500,
+  stake: 25,
+  myName: '',
+  myRole: '',       // 'host' or 'guest'
+  roomCode: '',
+  currentQ: 0,
+  myScore: 0,
+  oppScore: 0,
+  answered: false,
+  timer: null,
+  timeLeft: TIME_PER_QUESTION,
+  gameQuestions: [],
+  pollTimer: null,
+  lastOppAnswer: null,
+};
+
+// ─── STORAGE HELPERS ───────────────────────────────────────────────
+function roomKey(code) { return `hamon_room_${code}`; }
+
+function readRoom(code) {
+  try { return JSON.parse(localStorage.getItem(roomKey(code)) || 'null'); }
+  catch { return null; }
+}
+
+function writeRoom(code, data) {
+  localStorage.setItem(roomKey(code), JSON.stringify({ ...data, ts: Date.now() }));
+}
+
+function deleteRoom(code) {
+  localStorage.removeItem(roomKey(code));
+}
+
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({length:4}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
+}
+
+function getRandomQuestions() {
+  return [...questions].sort(() => Math.random()-0.5).slice(0, QUESTION_COUNT);
+}
+
+// ─── UI HELPERS ────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function updateCoinDisplay() {
+  document.getElementById('coinDisplay').textContent = state.coins;
+}
+
+function showNotif(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function setError(id, msg) {
+  document.getElementById(id).textContent = msg;
+}
+
+// ─── TAB SWITCHING ─────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('tabCreate').classList.toggle('active', tab === 'create');
+  document.getElementById('tabJoin').classList.toggle('active', tab === 'join');
+  document.getElementById('createMode').style.display = tab === 'create' ? '' : 'none';
+  document.getElementById('joinMode').style.display = tab === 'join' ? '' : 'none';
+}
+
+function selectStake(btn) {
+  document.querySelectorAll('.stake-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  state.stake = parseInt(btn.dataset.stake);
+}
+
+// ─── CREATE ROOM ───────────────────────────────────────────────────
+function createRoom() {
+  const name = document.getElementById('playerNameCreate').value.trim() || 'Player 1';
+  if (state.coins < state.stake) { setError('createError','Hindi sapat ang iyong coins!'); return; }
+
+  state.myName = name;
+  state.myRole = 'host';
+  state.roomCode = genCode();
+  state.gameQuestions = getRandomQuestions();
+
+  writeRoom(state.roomCode, {
+    host: name,
+    guest: null,
+    stake: state.stake,
+    questions: state.gameQuestions,
+    status: 'waiting',    // waiting | countdown | question_N | results
+    hostReady: true,
+    guestReady: false,
+    hostAnswers: {},      // { questionIndex: answerIndex or -1 (timeout) }
+    guestAnswers: {},
+    hostScore: 0,
+    guestScore: 0,
+    countdownStart: null,
+  });
+
+  showWaitingScreen();
+}
+
+// ─── JOIN ROOM ─────────────────────────────────────────────────────
+function joinRoom() {
+  const name = document.getElementById('playerNameJoin').value.trim() || 'Player 2';
+  const code = document.getElementById('roomCodeInput').value.toUpperCase().trim();
+
+  if (code.length !== 4) { setError('joinError','Ilagay ang 4-character na room code.'); return; }
+
+  const room = readRoom(code);
+  if (!room) { setError('joinError','Hindi mahanap ang room. Tiyakin ang code.'); return; }
+  if (room.guest) { setError('joinError','Puno na ang room na ito!'); return; }
+  if (room.status !== 'waiting') { setError('joinError','Nagsimula na ang laro sa room na ito.'); return; }
+
+  state.myName = name;
+  state.myRole = 'guest';
+  state.roomCode = code;
+  state.gameQuestions = room.questions;
+  state.stake = room.stake;
+
+  writeRoom(code, { ...room, guest: name, guestReady: true, status: 'waiting' });
+
+  document.getElementById('slot1Name').textContent = room.host;
+  document.getElementById('slot2Status').textContent = '✓ Handa';
+  document.getElementById('slot2').classList.add('filled');
+  document.getElementById('slot2').querySelector('.slot-name').textContent = name;
+  document.getElementById('slot2').querySelector('.slot-avatar').textContent = '👤';
+  document.getElementById('waitingMsg').textContent = 'Pareho kayong handa! Magsisimula na...';
+  document.getElementById('waitingDots').style.display = 'none';
+
+  showWaitingScreen();
+  startPoll('guest_joined');
+}
+
+// ─── WAITING SCREEN ────────────────────────────────────────────────
+function showWaitingScreen() {
+  document.getElementById('roomCodeDisplay').textContent = state.roomCode;
+  document.getElementById('slot1Name').textContent = state.myRole === 'host' ? state.myName : readRoom(state.roomCode)?.host || '';
+  if (state.myRole === 'host') {
+    document.getElementById('slot1Name').textContent = state.myName;
+  }
+  showScreen('waitingScreen');
+  startPoll('waiting');
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(state.roomCode).catch(()=>{});
+  showNotif(`📋 Nakopya: ${state.roomCode}`);
+}
+
+function cancelWaiting() {
+  stopPoll();
+  deleteRoom(state.roomCode);
+  resetGame();
+}
+
+// ─── POLLING ENGINE ────────────────────────────────────────────────
+function startPoll(mode) {
+  stopPoll();
+  state.pollTimer = setInterval(() => poll(mode), POLL_INTERVAL);
+}
+
+function stopPoll() {
+  if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+}
+
+let _lastPollMode = '';
+function poll(mode) {
+  const room = readRoom(state.roomCode);
+  if (!room) { handleDisconnect(); return; }
+
+  if (mode === 'waiting') {
+    if (state.myRole === 'host' && room.guest) {
+      // Guest joined! Update UI
+      document.getElementById('slot2').classList.add('filled');
+      document.getElementById('slot2').querySelector('.slot-name').textContent = room.guest;
+      document.getElementById('slot2').querySelector('.slot-avatar').textContent = '👤';
+      document.getElementById('slot2Status').textContent = '✓ Handa';
+      document.getElementById('waitingMsg').textContent = 'Pareho kayong handa! Magsisimula na...';
+      document.getElementById('waitingDots').style.display = 'none';
+
+      stopPoll();
+      // Host triggers countdown
+      setTimeout(() => startCountdownPhase(room), 800);
+    }
+  } else if (mode === 'guest_joined') {
+    if (room.status === 'countdown' || room.countdownStart) {
+      stopPoll();
+      guestFollowCountdown(room);
+    }
+  } else if (mode === 'question') {
+    // Check if opponent answered this question
+    const oppAnswers = state.myRole === 'host' ? room.guestAnswers : room.hostAnswers;
+    const qKey = String(state.currentQ);
+    if (oppAnswers[qKey] !== undefined && state.lastOppAnswer !== qKey) {
+      state.lastOppAnswer = qKey;
+      onOpponentAnswered(oppAnswers[qKey]);
+    }
+    // Check disconnect
+    if (Date.now() - (room.ts || 0) > 15000) {
+      document.getElementById('disconnectedBanner').style.display = '';
+    }
+  }
+}
+
+// ─── COUNTDOWN ─────────────────────────────────────────────────────
+function startCountdownPhase(room) {
+  const updatedRoom = readRoom(state.roomCode);
+  writeRoom(state.roomCode, { ...updatedRoom, status: 'countdown', countdownStart: Date.now() });
+  showScreen('countdownScreen');
+  runCountdown(3, () => {
+    state.currentQ = 0;
+    state.myScore = 0;
+    state.oppScore = 0;
+    const r = readRoom(state.roomCode);
+    writeRoom(state.roomCode, { ...r, status: 'question_0', hostScore:0, guestScore:0 });
+    startQuestionPhase();
+  });
+}
+
+function guestFollowCountdown(room) {
+  showScreen('countdownScreen');
+  // Calculate remaining countdown based on when host started it
+  const elapsed = room.countdownStart ? Math.floor((Date.now() - room.countdownStart) / 800) : 0;
+  const remaining = Math.max(0, 3 - elapsed);
+  runCountdown(remaining, () => {
+    state.currentQ = 0;
+    state.myScore = 0;
+    state.oppScore = 0;
+    startQuestionPhase();
+  });
+}
+
+function runCountdown(n, cb) {
+  const el = document.getElementById('countdownNum');
+  const lbl = document.getElementById('countdownLabel');
+  if (n <= 0) {
+    el.textContent = 'GO!';
+    lbl.textContent = '';
+    setTimeout(cb, 600);
+    return;
+  }
+  el.textContent = n;
+  lbl.textContent = 'Handa ang laro...';
+  setTimeout(() => runCountdown(n - 1, cb), 800);
+}
+
+// ─── QUESTION PHASE ────────────────────────────────────────────────
+function startQuestionPhase() {
+  const room = readRoom(state.roomCode);
+  state.myName = state.myRole === 'host' ? room.host : room.guest;
+
+  document.getElementById('liveYourName').textContent = state.myName;
+  document.getElementById('liveOppName').textContent = state.myRole === 'host' ? room.guest : room.host;
+  document.getElementById('resultYourName').textContent = state.myName;
+  document.getElementById('resultOppName').textContent = state.myRole === 'host' ? room.guest : room.host;
+
+  state.lastOppAnswer = null;
+  showScreen('questionScreen');
+  loadQuestion();
+  startPoll('question');
+}
+
+function loadQuestion() {
+  const q = state.gameQuestions[state.currentQ];
+  state.answered = false;
+  state.timeLeft = TIME_PER_QUESTION;
+  state.lastOppAnswer = null;
+
+  document.getElementById('answerStatusBar').style.display = 'none';
+  document.getElementById('questionProgress').textContent = `Tanong ${state.currentQ + 1} / ${QUESTION_COUNT}`;
+  document.getElementById('questionCategory').textContent = q.category;
+  document.getElementById('questionText').textContent = q.text;
+  document.getElementById('progressFill').style.width = `${(state.currentQ / QUESTION_COUNT) * 100}%`;
+  document.getElementById('liveYourScore').textContent = state.myScore;
+  document.getElementById('liveOppScore').textContent = state.oppScore;
+
+  // Opp status
+  document.getElementById('oppStatusDot').className = 'status-dot waiting';
+  document.getElementById('oppStatusText').textContent = 'Sumasagot...';
+
+  const grid = document.getElementById('choicesGrid');
+  grid.innerHTML = '';
+  q.choices.forEach((choice, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<span class="choice-letter">${letters[i]}</span>${choice}`;
+    btn.onclick = () => selectAnswer(i);
+    grid.appendChild(btn);
+  });
+
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(state.timer);
+  updateTimerUI(TIME_PER_QUESTION);
+  state.timer = setInterval(() => {
+    state.timeLeft--;
+    updateTimerUI(state.timeLeft);
+    if (state.timeLeft <= 0) {
+      clearInterval(state.timer);
+      if (!state.answered) timeOut();
+    }
+  }, 1000);
+}
+
+function updateTimerUI(t) {
+  const ring = document.getElementById('timerRing');
+  const text = document.getElementById('timerText');
+  const offset = 138 - (t / TIME_PER_QUESTION) * 138;
+  ring.style.strokeDashoffset = offset;
+  text.textContent = t;
+  const isRed = t <= 5;
+  ring.style.stroke = isRed ? '#ef4444' : 'var(--accent)';
+  text.style.color = isRed ? '#ef4444' : 'var(--accent)';
+}
+
+function selectAnswer(index) {
+  if (state.answered) return;
+  state.answered = true;
+  clearInterval(state.timer);
+
+  const q = state.gameQuestions[state.currentQ];
+  const btns = document.querySelectorAll('.choice-btn');
+  const isCorrect = index === q.answer;
+
+  if (isCorrect) state.myScore++;
+
+  btns.forEach((btn, i) => {
+    btn.disabled = true;
+    if (i === index && isCorrect) btn.classList.add('correct');
+    else if (i === index && !isCorrect) btn.classList.add('wrong');
+    if (i === q.answer && !isCorrect) btn.classList.add('reveal');
+  });
+
+  document.getElementById('liveYourScore').textContent = state.myScore;
+
+  // Write answer to shared room
+  const room = readRoom(state.roomCode);
+  if (room) {
+    const answerKey = state.myRole === 'host' ? 'hostAnswers' : 'guestAnswers';
+    const scoreKey = state.myRole === 'host' ? 'hostScore' : 'guestScore';
+    writeRoom(state.roomCode, {
+      ...room,
+      [answerKey]: { ...room[answerKey], [String(state.currentQ)]: index },
+      [scoreKey]: state.myScore,
+    });
+  }
+
+  showAnswerStatus();
+}
+
+function timeOut() {
+  state.answered = true;
+  const q = state.gameQuestions[state.currentQ];
+  const btns = document.querySelectorAll('.choice-btn');
+  btns.forEach((btn, i) => {
+    btn.disabled = true;
+    if (i === q.answer) btn.classList.add('reveal');
+  });
+
+  // Write timeout (-1) to room
+  const room = readRoom(state.roomCode);
+  if (room) {
+    const answerKey = state.myRole === 'host' ? 'hostAnswers' : 'guestAnswers';
+    writeRoom(state.roomCode, {
+      ...room,
+      [answerKey]: { ...room[answerKey], [String(state.currentQ)]: -1 },
+    });
+  }
+
+  showAnswerStatus();
+}
+
+function showAnswerStatus() {
+  // Check if opp already answered
+  const room = readRoom(state.roomCode);
+  const oppAnswers = room ? (state.myRole === 'host' ? room.guestAnswers : room.hostAnswers) : {};
+  const oppAlreadyAnswered = oppAnswers[String(state.currentQ)] !== undefined;
+
+  const bar = document.getElementById('answerStatusBar');
+  bar.style.display = 'flex';
+
+  if (oppAlreadyAnswered) {
+    bar.className = 'answer-status-bar both-answered';
+    bar.innerHTML = '✅ Pareho na kayong nakasagot!';
+    setTimeout(nextQuestion, 900);
+  } else {
+    bar.className = 'answer-status-bar waiting-opp';
+    bar.innerHTML = '<div class="dot" style="width:6px;height:6px;background:var(--accent)"></div> Naghihintay sa kalaban...';
+  }
+}
+
+function onOpponentAnswered(oppIndex) {
+  // Update opp status indicator
+  document.getElementById('oppStatusDot').className = 'status-dot answered';
+  document.getElementById('oppStatusText').textContent = 'Nakasagot na';
+
+  // Update opp score display
+  const room = readRoom(state.roomCode);
+  if (room) {
+    state.oppScore = state.myRole === 'host' ? (room.guestScore || 0) : (room.hostScore || 0);
+    document.getElementById('liveOppScore').textContent = state.oppScore;
+  }
+
+  if (state.answered) {
+    // Both answered, move to next
+    const bar = document.getElementById('answerStatusBar');
+    bar.className = 'answer-status-bar both-answered';
+    bar.innerHTML = '✅ Pareho na kayong nakasagot!';
+    bar.style.display = 'flex';
+    setTimeout(nextQuestion, 900);
+  }
+  // else: opponent answered first, we wait for player — poll will keep checking
+}
+
+function nextQuestion() {
+  state.currentQ++;
+  if (state.currentQ < QUESTION_COUNT) {
+    loadQuestion();
+  } else {
+    stopPoll();
+    showResults();
+  }
+}
+
+// ─── RESULTS ───────────────────────────────────────────────────────
+function showResults() {
+  const room = readRoom(state.roomCode);
+  const hostScore = room?.hostScore ?? (state.myRole === 'host' ? state.myScore : state.oppScore);
+  const guestScore = room?.guestScore ?? (state.myRole === 'guest' ? state.myScore : state.oppScore);
+
+  const myFinalScore = state.myRole === 'host' ? hostScore : guestScore;
+  const oppFinalScore = state.myRole === 'host' ? guestScore : hostScore;
+
+  document.getElementById('yourScore').textContent = myFinalScore;
+  document.getElementById('oppScore').textContent = oppFinalScore;
+
+  const coinResult = document.getElementById('coinResult');
+  const coinText = document.getElementById('coinResultText');
+  const { stake } = state;
+
+  if (myFinalScore > oppFinalScore) {
+    document.getElementById('resultEmoji').textContent = '🏆';
+    document.getElementById('resultTitle').textContent = 'Nanalo ka!';
+    document.getElementById('resultTitle').className = 'result-title win';
+    document.getElementById('resultSub').textContent = 'Kahanga-hanga! Ikaw ang kampeon ngayon.';
+    coinResult.className = 'coin-result gain';
+    coinText.textContent = `+${stake} coins na natanggap`;
+    state.coins += stake;
+  } else if (myFinalScore < oppFinalScore) {
+    document.getElementById('resultEmoji').textContent = '😤';
+    document.getElementById('resultTitle').textContent = 'Natalo...';
+    document.getElementById('resultTitle').className = 'result-title loss';
+    document.getElementById('resultSub').textContent = 'Huwag sumuko! Subukan ulit.';
+    coinResult.className = 'coin-result lose';
+    coinText.textContent = `-${stake} coins ang nawala`;
+    state.coins -= stake;
+  } else {
+    document.getElementById('resultEmoji').textContent = '🤝';
+    document.getElementById('resultTitle').textContent = 'Draw!';
+    document.getElementById('resultTitle').className = 'result-title draw';
+    document.getElementById('resultSub').textContent = 'Magkapantay kayo! Subukan ulit.';
+    coinResult.className = 'coin-result neutral';
+    coinText.textContent = 'Walang coins na nawala o natanggap';
+  }
+
+  updateCoinDisplay();
+  showScreen('resultScreen');
+
+  // Clean up room after a delay
+  setTimeout(() => deleteRoom(state.roomCode), 5000);
+}
+
+function handleDisconnect() {
+  stopPoll();
+  document.getElementById('disconnectedBanner').style.display = '';
+  showNotif('⚠️ Nawalan ng koneksyon ang kalaban');
+  // Auto-win for remaining player
+  setTimeout(showResults, 2000);
+}
+
+// ─── RESET ─────────────────────────────────────────────────────────
+function resetGame() {
+  stopPoll();
+  clearInterval(state.timer);
+  if (state.roomCode) deleteRoom(state.roomCode);
+
+  state = {
+    ...state,
+    myRole: '',
+    roomCode: '',
+    currentQ: 0,
+    myScore: 0,
+    oppScore: 0,
+    answered: false,
+    timer: null,
+    timeLeft: TIME_PER_QUESTION,
+    gameQuestions: [],
+    pollTimer: null,
+    lastOppAnswer: null,
+  };
+
+  document.getElementById('slot2').classList.remove('filled');
+  document.getElementById('slot2').querySelector('.slot-name').textContent = 'Kalaban';
+  document.getElementById('slot2').querySelector('.slot-avatar').textContent = '⏳';
+  document.getElementById('slot2Status').textContent = 'Naghihintay...';
+  document.getElementById('waitingDots').style.display = 'flex';
+  document.getElementById('waitingMsg').textContent = 'Naghihintay sa kalaban...';
+  document.getElementById('disconnectedBanner').style.display = 'none';
+  document.getElementById('createError').textContent = '';
+  document.getElementById('joinError').textContent = '';
+
+  showScreen('lobbyScreen');
+}
+
+// ─── ROOMCODE INPUT AUTO-UPPERCASE ─────────────────────────────────
+document.getElementById('roomCodeInput').addEventListener('input', function() {
+  this.value = this.value.toUpperCase();
+});
+
+// ─── CLEANUP on unload ─────────────────────────────────────────────
+window.addEventListener('beforeunload', () => {
+  if (state.roomCode) deleteRoom(state.roomCode);
+});
+</script>
+</body>
+</html>
